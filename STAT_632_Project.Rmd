@@ -1,0 +1,287 @@
+---
+title: "STAT_632_Project"
+author: "Yun Jing_qi2679_Sec1"
+date: "April 20, 2019"
+output:
+  word_document: default
+  html_document: default
+---
+
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(glmnet)
+```
+
+```{r}
+wine_white <- read.csv(file = "./Data/wineQualityWhites.csv", header = TRUE)
+head(wine_white)
+dim(wine_white)
+str(wine_white)
+names(wine_white)
+```
+
+```{r}
+library(Amelia)
+missmap(wine_white, main = "Missing values vs observed")
+```
+
+
+```{r}
+sapply(wine_white, function(x) sum(is.na(x)))
+```
+
+
+```{r}
+wine_white <- wine_white[,-1]
+wine_white$quality <- as.numeric(wine_white$quality)
+glimpse(wine_white)
+```
+
+$quality = \beta_0 + \beta_1 fixed.acidity + \beta_2 volatile.acidity+ \beta_3 citric.acid + \beta_4 residual.sugar + \beta_5 chlorides + \beta_6 free.sulfur.dioxide + \beta_7 total.sulfur.dioxide + \beta_8 density + \beta_9 pH + \beta_10 sulphates + \beta_11 alcohol +e$
+
+$quality = \beta_0 + \beta_1 log(fixed.acidity) + \beta_2 log(volatile.acidity) + \beta_3 sqrt(residual.sugar) + \beta_4 sqrt(free.sulfur.dioxide) + \beta_5 density + \beta_6 1/sqrt(pH) + \beta_7 log(sulphates) + \beta_8 sqrt(alcohol) +e$
+
+```{r}
+hist(wine_white$quality)
+```
+
+```{r}
+summary(wine_white)
+```
+
+```{r}
+pairs(quality ~ ., data = wine_white)
+```
+
+```{r}
+horribleformula <- update(quality~., ~(.)^11)
+horriblemodel <- lm(horribleformula, data=wine_white)
+```
+
+
+```{r}
+library(leaps)
+regsub_fit <- regsubsets(quality ~ ., data = wine_white, nvmax=11)
+regsub_summ <- summary(regsub_fit)
+
+attributes(regsub_summ)
+
+round(regsub_summ$rsq, 4)
+
+round(regsub_summ$adjr2, 4)
+
+which.max(regsub_summ$adjr2)
+
+coef(regsub_fit, 8)
+```
+
+```{r}
+n <- nrow(wine_white)
+aic_vec <- n*log(regsub_summ$rss/n) + 2*c(1:11)
+
+par(mfrow=c(1,3), mar=c(4.5, 4.5, 1, 1))
+plot(c(1:11), regsub_summ$adjr2, xlab="Number of Variables", ylab="Adjusted RSqr")
+abline(v=which.max(regsub_summ$adjr2))
+
+plot(c(1:11), aic_vec, xlab="Number of Variables", ylab="AIC")
+abline(v=which.min(aic_vec))
+
+plot(c(1:11), regsub_summ$bic, xlab="Number of Variables", ylab="BIC")
+abline(v=which.min(regsub_summ$bic))
+```
+
+
+```{r}
+which.min(aic_vec)
+coef(regsub_fit, 8)
+
+which.min(regsub_summ$bic)
+coef(regsub_fit, 8)
+```
+
+
+```{r}
+wine_full <- lm(quality ~ ., data = wine_white)
+wine_sa <- step(wine_full)
+summary(wine_sa)
+```
+
+```{r}
+wine_sb <- step(wine_full, k=log(n))
+summary(wine_sb)
+```
+
+```{r}
+lm_wine1 <- lm(quality ~ fixed.acidity + volatile.acidity + residual.sugar + free.sulfur.dioxide + density + pH + sulphates + alcohol, data = wine_white)
+```
+
+
+We can write the model lm_loan1 as $quality = \beta_0 + \beta_1 fixed.acidity + \beta_2 volatile.acidity+ \beta_3 residual.sugar +  \beta_4 free.sulfur.dioxide + \beta_5 density + \beta_6 pH + \beta_7 sulphates + \beta_8 alcohol +e$
+
+
+```{r}
+pairs(quality ~  fixed.acidity + volatile.acidity + residual.sugar + free.sulfur.dioxide + density + pH + sulphates + alcohol, data = wine_white)
+```
+
+```{r}
+wine_null <- lm(quality ~ 1, data = wine_white)
+anova(wine_null ,lm_wine1)
+```
+
+Since the p-value < 0.001, we reject the null hypothesis that$\beta_1 = \cdots = \beta_8 = 0$. Thus, we conclude, that at least one predictor is associated with the white wine quality.
+
+```{r}
+summary(lm_wine1)
+```
+
+```{r}
+plot(lm_wine1, which = 2)
+
+shapiro.test(lm_wine1$residuals)
+```
+
+Not noraml.
+
+```{r}
+plot(lm_wine1, which = 1)
+```
+
+No linear and no constant variance.
+
+Therefore, we need transformation.
+
+
+```{r}
+library(car)
+summary(powerTransform(cbind(fixed.acidity, volatile.acidity, residual.sugar, free.sulfur.dioxide, density, pH, sulphates, alcohol) ~ 1, wine_white))
+```
+
+```{r}
+lm_wine2 <- lm(quality ~ log(fixed.acidity) + log(volatile.acidity) + sqrt(residual.sugar) + sqrt(free.sulfur.dioxide) + density + (1/sqrt(pH)) + log(sulphates) + sqrt(alcohol), data = wine_white)
+summary(lm_wine2)
+AIC(lm_wine2)
+```
+
+```{r}
+AIC(lm_wine1)
+```
+
+```{r}
+summary(lm_wine1)$adj.r.squared
+
+summary(lm_wine2)$adj.r.squared
+```
+
+```{r}
+summary(lm_wine2)
+```
+
+```{r}
+pairs(quality ~ log(fixed.acidity) + log(volatile.acidity) + sqrt(residual.sugar) + sqrt(free.sulfur.dioxide) + density + 1/sqrt(pH) + log(sulphates) + sqrt(alcohol), data = wine_white)
+```
+
+```{r}
+plot(lm_wine2, which = 1)
+```
+
+```{r}
+plot(lm_wine2, which = 2)
+```
+
+
+```{r}
+par(mfrow=c(1,2), mar=c(2.5, 2.5, 2, 2))
+
+plot(predict(lm_wine1), wine_white$quality, xlab="Fitted Values", ylab="quality")
+lines(lowess(predict(lm_wine1), wine_white$quality), col='red')
+abline(0,1)
+
+plot(predict(lm_wine2), wine_white$quality, xlab="Fitted Values", ylab="quality")
+lines(lowess(predict(lm_wine2), wine_white$quality), col='red')
+abline(0,1)
+```
+
+```{r}
+plot(lm_wine2,which = 5)
+```
+
+```{r}
+p <- 8 
+n <- nrow(wine_white) 
+plot(hatvalues(lm_wine2), rstandard(lm_wine2), xlab= 'Leverage' , ylab= 'Standardized Residuals') 
+abline(h = c(-4,4),v = 2*(p+1)/n, lty=2)
+```
+
+
+```{r}
+set.seed(99)
+
+wine <- model.matrix(quality ~ ., data=wine_white)[, -12]
+q <- wine_white$quality
+
+train_idx <- sample(n, size = floor(0.7 * n))
+
+wine_train <- wine[train_idx, ]
+nrow(wine_train)
+
+wine_test <- wine[-train_idx, ]
+nrow(wine_test)
+
+q_train <- q[train_idx]
+
+q_test <- q[-train_idx]
+```
+
+```{r}
+lm_wine3 <- lm(quality ~ fixed.acidity + volatile.acidity + residual.sugar + free.sulfur.dioxide + density + pH + sulphates + alcohol, data = wine_white, subset = train_idx)
+
+lm_wine4 <- lm(quality ~ log(fixed.acidity) + log(volatile.acidity) + sqrt(residual.sugar) + sqrt(free.sulfur.dioxide) + density + 1/sqrt(pH) + log(sulphates) + sqrt(alcohol), data = wine_white, subset = train_idx)
+
+# fit ordinary least squares model w/ stepwise selection on training set
+lm_step_wine <- step(lm_wine4, trace=F)
+
+# fit ridge model on training set
+ridge_wine <- cv.glmnet(wine_train, q_train, alpha=0)
+
+# fit lasso model on training set
+lasso_wine <- cv.glmnet(wine_train, q_train, alpha=1)
+```
+
+
+```{r}
+compute_rmse <- function(y, y_pred) {
+  n <- length(y)
+  sqrt((1 / n) * sum((y - y_pred)^2))
+}
+
+wine_pred1 <- predict(lm_wine3, newdata = wine_white[-train_idx, ])
+rmse_ori <- compute_rmse(q_test, wine_pred1)
+
+wine_pred2 <- predict(lm_wine4, newdata = wine_white[-train_idx, ])
+rmse_fin <- compute_rmse(q_test, wine_pred2)
+```
+
+```{r}
+#step
+wine_step_pred <- predict(lm_step_wine, newdata = wine_white[-train_idx, ])
+rmse_step <- compute_rmse(q_test, wine_step_pred)
+
+# ridge
+wine_ridge_pred <- predict(ridge_wine, newx = wine_test, s = "lambda.min")
+wine_ridge_pred <- as.numeric(wine_ridge_pred)
+rmse_ridge <- compute_rmse(q_test, wine_ridge_pred)
+
+# lasso
+wine_lasso_pred <- predict(lasso_wine, newx = wine_test, s = "lambda.min")
+wine_lasso_pred <- as.numeric(wine_lasso_pred)
+rmse_lasso <- compute_rmse(q_test, wine_lasso_pred)
+```
+
+**Compare RMSE**
+
+```{r}
+data.frame(Model = c('OLS_ori', 'OLS_final', 'OLS_step', 'Ridge', 'Lasso' ), RMSE = c(rmse_ori, rmse_fin, rmse_step, rmse_ridge, rmse_lasso))
+```
+
